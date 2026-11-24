@@ -1,3 +1,4 @@
+import snapshot from "./clutch-snapshot.js";
 export const placementTable = [
   65, 56, 52, 48, 44, 40, 38, 36, 34, 32, 30, 28, 26, 24, 22, 20, 18, 16, 14,
   12, 10, 8, 6, 4, 2,
@@ -5,75 +6,20 @@ export const placementTable = [
 export function initialState() {
   return {
     revision: 0,
-    event: "Friday Night Finals",
-    stage: "Europe / Duos",
-    match: 5,
-    totalMatches: 6,
-    qualifyingPlaces: 3,
+    event: snapshot.event,
+    stage: snapshot.stage,
+    match: 3,
+    totalMatches: snapshot.totalMatches,
+    qualifyingPlaces: 15,
     currentQualOverride: null,
-    estimatedQual: 300,
-    eliminationPoints: 2,
-    placementPoints: [...placementTable],
-    featuredId: "north",
+    estimatedQual: null,
+    eliminationPoints: 0,
+    placementPoints: [100],
+    featuredId: snapshot.teams.find((t) => t.name.includes("Peterbot")).id,
     visible: true,
     timer: { elapsed: 0, startedAt: null },
-    teams: [
-      {
-        id: "north",
-        name: "North",
-        roster: "Aster + Vex",
-        color: "#4158c9",
-        logo: "",
-        points: 240,
-        matches: 4,
-        eliminations: 0,
-        placement: 0,
-      },
-      {
-        id: "orbit",
-        name: "Orbit",
-        roster: "Nova + Sol",
-        color: "#b44724",
-        logo: "",
-        points: 226,
-        matches: 4,
-        eliminations: 0,
-        placement: 0,
-      },
-      {
-        id: "tempo",
-        name: "Tempo",
-        roster: "Kiro + Ren",
-        color: "#237660",
-        logo: "",
-        points: 210,
-        matches: 4,
-        eliminations: 0,
-        placement: 0,
-      },
-      {
-        id: "fable",
-        name: "Fable",
-        roster: "Luma + Echo",
-        color: "#86569e",
-        logo: "",
-        points: 196,
-        matches: 4,
-        eliminations: 0,
-        placement: 0,
-      },
-      {
-        id: "atlas",
-        name: "Atlas",
-        roster: "Finn + Ash",
-        color: "#936619",
-        logo: "",
-        points: 182,
-        matches: 4,
-        eliminations: 0,
-        placement: 0,
-      },
-    ],
+    source: { ...snapshot.source, edited: false },
+    teams: structuredClone(snapshot.teams),
   };
 }
 export function livePoints(team, state) {
@@ -81,6 +27,20 @@ export function livePoints(team, state) {
     team.eliminations * state.eliminationPoints +
     (state.placementPoints[team.placement - 1] || 0)
   );
+}
+export function bankMatch(state) {
+  for (const team of state.teams) {
+    team.points += livePoints(team, state);
+    team.wins = (team.wins || 0) + (team.placement === 1 ? 1 : 0);
+    team.totalEliminations = (team.totalEliminations || 0) + team.eliminations;
+    team.matches++;
+    team.eliminations = 0;
+    team.placement = 0;
+  }
+  if (state.source) state.source.edited = true;
+  state.match = Math.min(state.match + 1, state.totalMatches);
+  state.timer = { elapsed: 0, startedAt: null };
+  return state;
 }
 export function standings(state) {
   // Equal totals share a rank. Alphabetical order only stabilizes the display; it is not an official tiebreaker.
@@ -148,7 +108,7 @@ export function validateState(input) {
     qualifyingPlaces: integer(
       input.qualifyingPlaces,
       1,
-      100,
+      100000,
       "Qualifying places",
     ),
     currentQualOverride:
@@ -160,18 +120,29 @@ export function validateState(input) {
             1000000,
             "Current qualification points",
           ),
-    estimatedQual: integer(
-      input.estimatedQual,
-      0,
-      1000000,
-      "Estimated qualification points",
-    ),
+    estimatedQual:
+      input.estimatedQual == null
+        ? null
+        : integer(
+            input.estimatedQual,
+            0,
+            1000000,
+            "Estimated qualification points",
+          ),
     eliminationPoints: integer(
       input.eliminationPoints,
       0,
       100,
       "Points per elimination",
     ),
+    source: input.source
+      ? {
+          label: text(input.source.label, 80, "Source label"),
+          url: text(input.source.url, 2048, "Source URL"),
+          capturedAt: text(input.source.capturedAt, 60, "Source timestamp"),
+          edited: input.source.edited === true,
+        }
+      : null,
     visible: input.visible === true,
     featuredId: text(input.featuredId, 80, "Featured team"),
     timer: {
@@ -187,6 +158,8 @@ export function validateState(input) {
             ),
     },
   };
+  if (result.source && !/^https:\/\/clutchfn\.com\//.test(result.source.url))
+    throw new Error("Source URL must be a Clutch HTTPS URL.");
   if (result.match > result.totalMatches)
     throw new Error("Match cannot exceed total matches.");
   if (
@@ -200,9 +173,9 @@ export function validateState(input) {
   if (
     !Array.isArray(input.teams) ||
     input.teams.length < 1 ||
-    input.teams.length > 100
+    input.teams.length > 500
   )
-    throw new Error("Provide between 1 and 100 teams.");
+    throw new Error("Provide between 1 and 500 teams.");
   result.teams = input.teams.map((team) => {
     if (!team || typeof team !== "object")
       throw new Error("Expected a team object.");
@@ -226,6 +199,13 @@ export function validateState(input) {
         0,
         100000,
         "Place override",
+      ),
+      wins: integer(team.wins ?? 0, 0, 100, "Wins"),
+      totalEliminations: integer(
+        team.totalEliminations ?? 0,
+        0,
+        10000,
+        "Total eliminations",
       ),
       matches: integer(team.matches, 0, 100, "Matches"),
       eliminations: integer(team.eliminations, 0, 200, "Eliminations"),

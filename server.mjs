@@ -95,6 +95,8 @@ export async function createApp({
         "/overlay": "overlay.html",
         "/app.js": "app.js",
         "/model.js": "model.js",
+        "/clutch-snapshot.js": "clutch-snapshot.js",
+        "/assets/gameplay.webp": "assets/gameplay.webp",
         "/style.css": "style.css",
       };
       const file = files[url.pathname];
@@ -103,6 +105,7 @@ export async function createApp({
         ".html": "text/html",
         ".js": "text/javascript",
         ".css": "text/css",
+        ".webp": "image/webp",
       };
       response.writeHead(200, {
         "Content-Type": `${types[path.extname(file)]}; charset=utf-8`,

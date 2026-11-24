@@ -4,7 +4,8 @@ import { mkdtemp, rm, readFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import {
-  initialState,
+  initialState as productionState,
+  bankMatch,
   validateState,
   standings,
   currentQual,
@@ -12,6 +13,37 @@ import {
   elapsedSeconds,
 } from "../public/model.js";
 import { createApp } from "../server.mjs";
+
+function initialState() {
+  const s = productionState();
+  Object.assign(s, {
+    event: "Friday Night Finals",
+    stage: "Europe / Duos",
+    match: 5,
+    totalMatches: 6,
+    qualifyingPlaces: 3,
+    currentQualOverride: null,
+    estimatedQual: 300,
+    source: null,
+    eliminationPoints: 2,
+    placementPoints: [65, 56, 52, 48, 44, 40],
+    featuredId: "north",
+  });
+  s.teams = ["north", "orbit", "tempo", "fable", "atlas"].map((id, i) => ({
+    id,
+    name: id,
+    roster: "Test players",
+    color: "#4158c9",
+    logo: "",
+    points: [240, 226, 210, 196, 182][i],
+    matches: 4,
+    wins: 0,
+    totalEliminations: 0,
+    eliminations: 0,
+    placement: 0,
+  }));
+  return s;
+}
 
 test("live points change rankings and qualification without changing banked totals", () => {
   const state = initialState();
@@ -52,6 +84,42 @@ test("timer stays accurate across refreshes", () => {
   assert.equal(elapsedSeconds({ elapsed: 20, startedAt: 1000 }, 6500), 25);
   assert.equal(elapsedSeconds({ elapsed: 20, startedAt: null }, 6500), 20);
 });
+test("banking transfers live points, wins and eliminations without counting them twice", () => {
+  const state = initialState();
+  state.teams[0].eliminations = 4;
+  state.teams[0].placement = 1;
+  state.teams[0].wins = 2;
+  state.teams[0].totalEliminations = 20;
+  bankMatch(state);
+  const team = state.teams[0];
+  assert.equal(team.points, 313);
+  assert.equal(team.wins, 3);
+  assert.equal(team.totalEliminations, 24);
+  assert.equal(team.matches, 5);
+  assert.equal(livePoints(team, state), 0);
+  assert.equal(team.placement, 0);
+});
+test("Clutch snapshot preserves reported ranks and cumulative stats", () => {
+  const state = validateState(productionState());
+  const team = state.teams.find((t) => t.name.includes("Peterbot"));
+  assert.deepEqual(
+    [
+      team.matches,
+      team.wins,
+      team.totalEliminations,
+      team.points,
+      team.placeOverride,
+    ],
+    [3, 1, 14, 100, 13],
+  );
+  assert.equal(state.estimatedQual, null);
+  assert.match(state.source.url, /^https:\/\/clutchfn.com\//);
+  // Show exports from v1.0 remain readable without the new cumulative fields.
+  const old = initialState();
+  delete old.teams[0].wins;
+  delete old.teams[0].totalEliminations;
+  assert.equal(validateState(old).teams[0].wins, 0);
+});
 test("manual tournament places and qualification line work with a partial field", () => {
   const state = initialState();
   state.teams[0].placeOverride = 42;
@@ -76,7 +144,7 @@ test("HTTP persistence, conflict handling, SSE and origin protection", async () 
     const reader = stream.body.getReader();
     assert.match(
       new TextDecoder().decode((await reader.read()).value),
-      /Friday Night Finals/,
+      /Squads Victory Cup/,
     );
     const state = await (await fetch(`${base}/api/state`)).json();
     state.event = "Test Finals";

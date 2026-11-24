@@ -118,13 +118,27 @@ try {
   await wait(
     `document.querySelector('.qual-bar')?.textContent.includes('350')`,
   );
-  await evaluate(`document.querySelector('[data-feature="orbit"]').click()`);
+  await evaluate(
+    `document.querySelector('[data-feature="417e41751d5049f0b2253dbb933e88a8"]').click()`,
+  );
   await wait(
-    `document.querySelector('[data-feature="orbit"]')?.textContent === 'Featured'`,
+    `document.querySelector('[data-feature="417e41751d5049f0b2253dbb933e88a8"]')?.textContent === 'Featured'`,
   );
   await evaluate(`document.querySelector('#view-featured').click()`);
   await wait(
-    `document.querySelector('.featured-name')?.textContent === 'Orbit'`,
+    `document.querySelector('.featured-name')?.textContent === 'dzd glo + ARM Saynxǃ'`,
+  );
+  assert.deepEqual(
+    await evaluate(
+      `[...document.querySelectorAll('.featured-stats span')].map(el => el.textContent)`,
+    ),
+    ["Matches", "Wins", "Elims", "Points"],
+  );
+  assert.deepEqual(
+    await evaluate(
+      `[...document.querySelectorAll('.featured-stats strong')].map(el => el.textContent)`,
+    ),
+    ["3", "2", "44", "200"],
   );
   await evaluate(`document.querySelector('#toggle-clock').click()`);
   await wait(
@@ -136,7 +150,7 @@ try {
   );
   await send("Page.navigate", { url: `${base}/overlay?view=featured` });
   await wait(
-    `document.querySelector('.board.is-hidden') && document.querySelector('.featured-name')?.textContent === 'Orbit'`,
+    `document.querySelector('.board.is-hidden') && document.querySelector('.featured-name')?.textContent === 'dzd glo + ARM Saynxǃ'`,
   );
   assert.equal(
     await evaluate(`getComputedStyle(document.body).backgroundColor`),
@@ -159,7 +173,7 @@ try {
   });
   assert.equal(update.status, 200);
   await wait(
-    `document.querySelector('.board:not(.is-hidden)') && document.querySelector('.qual-bar')?.textContent.includes('275') && document.querySelector('.featured-stats')?.textContent.includes('#42')`,
+    `document.querySelector('.board:not(.is-hidden)') && document.querySelector('.qual-bar')?.textContent.includes('275') && document.querySelector('.featured-place')?.textContent.includes('#42')`,
   );
   for (const width of [320, 375, 768, 1440]) {
     await send("Emulation.setDeviceMetricsOverride", {
@@ -173,7 +187,7 @@ try {
       `document.querySelector('#connection')?.textContent === 'Connected to show'`,
     );
     assert.equal(
-      await evaluate(`document.documentElement.scrollWidth <= innerWidth`),
+      await evaluate(`document.documentElement.scrollWidth <= ${width}`),
       true,
       `Page overflow at ${width}px`,
     );

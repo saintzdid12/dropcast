@@ -5,12 +5,19 @@ import {
   elapsedSeconds,
   formatTime,
   validateState,
+  initialState,
+  bankMatch,
 } from "./model.js";
 
 const $ = (id) => document.getElementById(id);
 const overlay = document.body.classList.contains("overlay-page");
 const params = new URLSearchParams(location.search);
-let view = params.get("view") === "featured" ? "featured" : "leaderboard";
+let view =
+  params.get("view") === "featured" || (!overlay && !params.has("view"))
+    ? "featured"
+    : "leaderboard";
+let showAll = false,
+  messageTimer;
 let state,
   saving = false,
   queue = Promise.resolve();
@@ -30,20 +37,32 @@ function board() {
   const rows = standings(state);
   const team = rows.find((x) => x.id === state.featuredId) || rows[0];
   const cutoff = currentQual(state);
+  const elims = (team) => (team.totalEliminations || 0) + team.eliminations;
+  const wins = (team) => (team.wins || 0) + (team.placement === 1 ? 1 : 0);
   const header = `<div class="board-head"><div><div class="board-title">${escape(state.event)}</div><div class="board-stage">${escape(state.stage)}</div></div><div class="board-match">Match ${state.match} / ${state.totalMatches}<span data-clock>${formatTime(elapsedSeconds(state.timer))}</span></div></div>`;
-  const qualification = `<div class="qual-bar"><div>Current qual <strong>${cutoff ?? "—"}</strong></div><div>Estimated qual <strong>${state.estimatedQual}</strong></div></div>`;
-  const featured = `<div class="featured-main" style="--team-color:${team.color}">${mark(team)}<div><div class="featured-name">${escape(team.name)}</div><div class="featured-roster">${escape(team.roster)}</div></div></div><div class="featured-stats"><div><span>Place</span><strong>#${team.rank}</strong></div><div><span>Points</span><strong>${team.total}</strong></div><div><span>Matches</span><strong>${team.matches}</strong></div><div><span>Live elims</span><strong>${team.eliminations}</strong></div></div>`;
-  const leaderboard = `<div class="board-columns"><span>#</span><span>Team</span><span>Played</span><span>Points</span></div>${rows
+  const qualification = `<div class="qual-bar"><div>Current qual <strong>${cutoff ?? "—"}</strong></div><div>Estimated qual <strong>${state.estimatedQual ?? "—"}</strong></div></div>`;
+  const featured = `<div class="featured-main">${mark(team)}<div><div class="featured-name">${escape(team.name)}</div><div class="featured-roster">${escape(team.roster)}</div></div><div class="featured-place">Place<strong>#${team.rank}</strong></div></div><div class="featured-stats"><div><span>Matches</span><strong>${team.matches}</strong></div><div><span>Wins</span><strong>${wins(team)}</strong></div><div><span>Elims</span><strong>${elims(team)}</strong></div><div><span>Points</span><strong>${team.total}</strong></div></div>`;
+  const leaderboard = `<div class="board-columns"><span>#</span><span>Team</span><span>Matches</span><span>Wins</span><span>Elims</span><span>Points</span></div>${rows
     .slice(0, Math.min(12, Math.max(1, Number(params.get("rows")) || 5)))
     .map(
       (team) =>
-        `<div class="board-row ${team.id === state.featuredId ? "is-featured" : ""}"><span>${team.rank}</span><div class="team-cell">${mark(team)}<span class="team-text">${escape(team.name)}</span></div><span>${team.matches}</span><span class="points">${team.total}</span></div>`,
+        `<div class="board-row ${team.id === state.featuredId ? "is-featured" : ""}"><span>${team.rank}</span><div class="team-cell">${mark(team)}<span class="team-text" title="${escape(team.name + " / " + team.roster)}">${escape(team.name)}</span></div><span>${team.matches}</span><span>${wins(team)}</span><span>${elims(team)}</span><span class="points">${team.total}</span></div>`,
     )
     .join("")}`;
-  return `<div class="board ${!state.visible && overlay ? "is-hidden" : ""}">${header}${qualification}${view === "featured" ? featured : leaderboard}<div class="board-foot"><span>Top ${state.qualifyingPlaces} qualify${view === "featured" && cutoff !== null ? ` / ${team.total >= cutoff ? "+" : ""}${team.total - cutoff} from line` : ""}</span><span>Provisional standings</span></div></div>`;
+  const source = state.source
+    ? state.source.edited
+      ? "Operator updated"
+      : "Clutch snapshot"
+    : "Manual standings";
+  return `<div class="board ${!state.visible && overlay ? "is-hidden" : ""}">${header}${qualification}${view === "featured" ? featured : leaderboard}<div class="board-foot"><span>${view === "featured" && cutoff !== null ? `${team.total >= cutoff ? "+" : ""}${team.total - cutoff} from current line` : `Top ${state.qualifyingPlaces} line`}</span><span>${source}</span></div></div>`;
 }
 function message(text, error = false) {
   if ($("message")) {
+    clearTimeout(messageTimer);
+    if (!error)
+      messageTimer = setTimeout(() => {
+        $("message").textContent = "";
+      }, 3200);
     $("message").textContent = text;
     $("message").dataset.error = String(error);
   }
@@ -70,6 +89,7 @@ function render() {
   renderGraphic();
   if (overlay) return;
   $("event-title").textContent = state.event;
+  $("event-stage").textContent = state.stage;
   for (const key of [
     "event",
     "stage",
@@ -79,28 +99,50 @@ function render() {
     "estimatedQual",
     "eliminationPoints",
   ])
-    $(key).value = state[key];
+    $(key).value = state[key] ?? "";
   $("placementPoints").value = state.placementPoints.join(", ");
   $("currentQualOverride").value = state.currentQualOverride ?? "";
   $("visibility").textContent = state.visible ? "Hide overlay" : "Show overlay";
   $("toggle-clock").textContent =
     state.timer.startedAt === null ? "Start clock" : "Pause clock";
   $("qual-explainer").textContent =
-    currentQual(state) === null
-      ? "Enter the tournament cutoff above, or add the qualifying team to calculate it. Auto mode needs the full field for an accurate line."
-      : `Current line: ${currentQual(state)} points at place ${state.qualifyingPlaces}. ${state.currentQualOverride != null ? "Manual cutoff." : "Calculated from entered standings, including live points."} Estimate is entered manually.`;
-  $("teams").innerHTML = standings(state)
+    state.currentQualOverride != null
+      ? "Manual cutoff. Clear it to calculate from standings."
+      : "Current line uses the qualifying place above. Estimated qual is entered manually.";
+  const source = state.source;
+  const captured = source
+    ? new Date(source.capturedAt).toLocaleDateString(undefined, {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      })
+    : "";
+  $("source-status").textContent = source
+    ? source.edited
+      ? "Clutch snapshot / edited"
+      : "Clutch snapshot"
+    : "Manual standings";
+  $("data-note").textContent = source
+    ? `${source.edited ? "Edited snapshot" : "Clutch snapshot"} from ${captured}.`
+    : "Manually entered results.";
+  $("data-link").hidden = !source;
+  if (source) $("data-link").href = source.url;
+  const rows = standings(state);
+  const visibleRows = showAll
+    ? rows
+    : rows.filter((team, i) => i < 8 || team.id === state.featuredId);
+  $("team-count").textContent = `${visibleRows.length} of ${rows.length} teams`;
+  $("show-all").textContent = showAll ? "Show fewer teams" : "Show all teams";
+  $("show-all").hidden = rows.length <= 8;
+  $("teams").innerHTML = visibleRows
     .map(
       (team) =>
-        `<tr><td class="rank">#${team.rank}</td><td><div class="team-name">${escape(team.name)}</div><small>${escape(team.roster)}</small></td><td>${input("points", team.points, team.id)}</td><td>${input("matches", team.matches, team.id, 0, 100)}</td><td>${input("eliminations", team.eliminations, team.id, 0, 200)}</td><td>${input("placement", team.placement, team.id, 0, 100)}</td><td class="total">${team.total}</td><td><button data-feature="${escape(team.id)}" aria-pressed="${state.featuredId === team.id}">${state.featuredId === team.id ? "Featured" : "Feature"}</button></td></tr>`,
+        `<tr><td class="rank">#${team.rank}</td><td><div class="team-name" title="${escape(team.name)}">${escape(team.name)}</div><small title="${escape(team.roster)}">${escape(team.roster)}</small></td><td>${input("matches", team.matches, team.id, 0, 100)}</td><td>${input("wins", team.wins || 0, team.id, 0, 100)}</td><td>${input("totalEliminations", team.totalEliminations || 0, team.id, 0, 10000)}</td><td>${input("points", team.points, team.id)}</td><td><button data-feature="${escape(team.id)}" aria-pressed="${state.featuredId === team.id}">${state.featuredId === team.id ? "Featured" : "Feature"}</button></td></tr>`,
     )
     .join("");
-  $("identity-editor").innerHTML = state.teams
-    .map(
-      (team) =>
-        `<div class="identity-row"><label>Team name<input data-team="${escape(team.id)}" data-field="name" value="${escape(team.name)}" maxlength="40"></label><label>Players<input data-team="${escape(team.id)}" data-field="roster" value="${escape(team.roster)}" maxlength="100"></label><label>Color<input type="color" data-team="${escape(team.id)}" data-field="color" value="${team.color}"></label><label class="logo-field">Logo URL (optional)<input data-team="${escape(team.id)}" data-field="logo" type="url" value="${escape(team.logo)}" placeholder="https://…"></label><label>Place override (0 = auto)<input data-team="${escape(team.id)}" data-field="placeOverride" type="number" min="0" max="100000" value="${team.placeOverride || 0}"></label><button data-remove="${escape(team.id)}" ${state.teams.length === 1 ? "disabled" : ""}>Remove</button></div>`,
-    )
-    .join("");
+  const team = state.teams.find((x) => x.id === state.featuredId);
+  $("identity-editor").innerHTML =
+    `<p>Editing the featured team. Select Feature in the table to edit another team.</p><div class="identity-row"><label>Team name<input data-team="${escape(team.id)}" data-field="name" value="${escape(team.name)}" maxlength="40"></label><label>Other players<input data-team="${escape(team.id)}" data-field="roster" value="${escape(team.roster)}" maxlength="100"></label><label>Color<input type="color" data-team="${escape(team.id)}" data-field="color" value="${team.color}"></label><label class="logo-field">Logo URL<input type="url" data-team="${escape(team.id)}" data-field="logo" value="${escape(team.logo)}" placeholder="https://…"></label><label>Place (0 = auto)${input("placeOverride", team.placeOverride || 0, team.id, 0, 100000)}</label><label>Live elims${input("eliminations", team.eliminations, team.id, 0, 200)}</label><label>Match finish (0 = none)${input("placement", team.placement, team.id, 0, 100)}</label><button data-remove="${escape(team.id)}" ${state.teams.length === 1 ? "disabled" : ""}>Remove team</button></div>`;
   updateSource();
   tick();
 }
@@ -152,6 +194,24 @@ function tick() {
     );
 }
 function setupDesk() {
+  $("show-all").onclick = () => {
+    showAll = !showAll;
+    render();
+  };
+  $("load-snapshot").onclick = () => {
+    if (confirm("Replace this show with the saved Clutch standings snapshot?"))
+      change((next) => {
+        const revision = next.revision;
+        Object.assign(next, initialState(), { revision });
+      }, "Clutch snapshot loaded.");
+  };
+  const motion = $("reduce-motion");
+  motion.checked = localStorage.getItem("dropcast-reduce-motion") === "true";
+  document.body.classList.toggle("reduce-motion", motion.checked);
+  motion.onchange = () => {
+    document.body.classList.toggle("reduce-motion", motion.checked);
+    localStorage.setItem("dropcast-reduce-motion", String(motion.checked));
+  };
   $("currentQualOverride").addEventListener("change", (event) => {
     const value = event.target.value === "" ? null : Number(event.target.value);
     change((next) => {
@@ -170,7 +230,9 @@ function setupDesk() {
     $(key).addEventListener("change", (event) => {
       const value =
         event.target.type === "number"
-          ? number(event.target.value)
+          ? key === "estimatedQual" && event.target.value === ""
+            ? null
+            : number(event.target.value)
           : event.target.value;
       change((next) => {
         next[key] = value;
@@ -194,6 +256,7 @@ function setupDesk() {
           : event.target.value;
       change((next) => {
         next.teams.find((x) => x.id === team)[field] = value;
+        if (next.source) next.source.edited = true;
       });
     }
   });
@@ -217,18 +280,23 @@ function setupDesk() {
   });
   $("add-team").onclick = () =>
     change((next) => {
+      const id = crypto.randomUUID();
+      next.featuredId = id;
+      if (next.source) next.source.edited = true;
       next.teams.push({
-        id: crypto.randomUUID(),
+        id,
         name: `Team ${next.teams.length + 1}`,
         roster: "",
         color: "#4158c9",
         logo: "",
         points: 0,
+        wins: 0,
+        totalEliminations: 0,
         matches: 0,
         eliminations: 0,
         placement: 0,
       });
-    }, "Team added. Edit its name under Edit team identity.");
+    }, "Team added. Edit it under Team settings.");
   $("visibility").onclick = () =>
     change((next) => {
       next.visible = !next.visible;
@@ -250,24 +318,23 @@ function setupDesk() {
       )
     )
       change((next) => {
-        for (const team of next.teams) {
-          team.points += livePoints(team, next);
-          team.matches++;
-          team.eliminations = 0;
-          team.placement = 0;
-        }
-        next.match = Math.min(next.match + 1, next.totalMatches);
-        next.timer = { elapsed: 0, startedAt: null };
+        bankMatch(next);
       }, "Match banked. Live results cleared.");
   };
   $("view-leaderboard").onclick = () => {
     view = "leaderboard";
     renderGraphic();
+    $("preview-board").classList.remove("is-switching");
+    void $("preview-board").offsetWidth;
+    $("preview-board").classList.add("is-switching");
     updateSource();
   };
   $("view-featured").onclick = () => {
     view = "featured";
     renderGraphic();
+    $("preview-board").classList.remove("is-switching");
+    void $("preview-board").offsetWidth;
+    $("preview-board").classList.add("is-switching");
     updateSource();
   };
   $("copy-source").onclick = async () => {
@@ -312,11 +379,14 @@ function setupDesk() {
       )
     )
       change((next) => {
+        if (next.source) next.source.edited = true;
         next.match = 1;
         next.timer = { elapsed: 0, startedAt: null };
         next.teams.forEach((team) =>
           Object.assign(team, {
             points: 0,
+            wins: 0,
+            totalEliminations: 0,
             matches: 0,
             eliminations: 0,
             placement: 0,
