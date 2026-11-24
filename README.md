@@ -2,7 +2,7 @@
 
 Fortnite tournament overlays for OBS, controlled from a local browser. Includes standings, a featured-team view, qualification points, and a match clock.
 
-![Dropcast broadcast desk](docs/operator.png)
+![Dropcast broadcast desk with the dark glass interface and Clutch standings](docs/broadcast-desk-v1.1.png)
 
 ## Start a broadcast
 
