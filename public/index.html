@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Dropcast / Broadcast desk</title>
+    <link rel="stylesheet" href="/style.css" />
+    <script type="module" src="/app.js"></script>
+  </head>
+  <body>
+    <header class="masthead">
+      <a class="wordmark" href="/"
+        >dropcast<span class="brand-square" aria-hidden="true"></span></a
+      ><span>Fortnite broadcast desk</span
+      ><strong id="connection" role="status">Connecting…</strong>
+    </header>
+    <main class="desk">
+      <section class="show-head">
+        <div>
+          <h1 id="event-title">Friday Night Finals</h1>
+          <p>Run the standings. Keep the story on screen.</p>
+        </div>
+        <button id="visibility">Hide overlay</button>
+      </section>
+      <section aria-label="Broadcast preview" class="preview-section">
+        <div class="section-line">
+          <h2>Program preview</h2>
+          <div class="tabs" aria-label="Preview view">
+            <button id="view-leaderboard" aria-pressed="true">Standings</button
+            ><button id="view-featured" aria-pressed="false">
+              Featured team
+            </button>
+          </div>
+        </div>
+        <div class="preview-stage">
+          <div id="preview-board"></div>
+          <p class="preview-note">
+            Transparent in OBS. Preview background only.
+          </p>
+        </div>
+        <div class="source-line">
+          <label for="source-url"
+            >OBS browser source <span>1920 × 1080</span></label
+          >
+          <div>
+            <input id="source-url" readonly /><button id="copy-source">
+              Copy URL</button
+            ><a id="open-overlay" target="_blank" rel="noopener"
+              >Open overlay</a
+            >
+          </div>
+        </div>
+      </section>
+      <div id="message" role="status" aria-live="polite"></div>
+      <div class="workspace">
+        <section class="standings-editor">
+          <div class="section-line">
+            <div>
+              <h2>Team standings</h2>
+              <p>Banked points + this match’s eliminations and placement.</p>
+            </div>
+            <button id="add-team">Add team</button>
+          </div>
+          <p class="helper">
+            Sample teams are loaded for your first show. Replace them with your
+            tournament field.
+          </p>
+          <div class="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Place</th>
+                  <th>Team / players</th>
+                  <th>Banked pts</th>
+                  <th>Matches</th>
+                  <th>Elims</th>
+                  <th>Finish</th>
+                  <th>Total</th>
+                  <th>On screen</th>
+                </tr>
+              </thead>
+              <tbody id="teams"></tbody>
+            </table>
+          </div>
+          <div class="match-actions">
+            <button id="bank-match" class="primary">Bank match results</button
+            ><span
+              >Add live points to totals and increment each team’s
+              matches.</span
+            >
+          </div>
+          <details>
+            <summary>Edit team identity</summary>
+            <div id="identity-editor"></div>
+          </details>
+          <details>
+            <summary>Save, restore, or clear the show</summary>
+            <div class="file-actions">
+              <button id="export">Export show JSON</button
+              ><label class="file-button"
+                >Import show JSON<input
+                  type="file"
+                  id="import"
+                  accept=".json,application/json" /></label
+              ><button id="reset">Clear all results</button>
+            </div>
+            <p>
+              Import replaces the current show. Results are saved on this
+              computer after every change.
+            </p>
+          </details>
+        </section>
+        <aside>
+          <section class="settings">
+            <h2>Qualification line</h2>
+            <label
+              >Qualifying places<input
+                id="qualifyingPlaces"
+                type="number"
+                min="1"
+                max="100" /></label
+            ><label
+              >Current qual override (optional)<input
+                id="currentQualOverride"
+                type="number"
+                min="0"
+                max="1000000"
+                placeholder="Auto from standings" /></label
+            ><label
+              >Estimated qual points<input
+                id="estimatedQual"
+                type="number"
+                min="0"
+                max="1000000"
+            /></label>
+            <p id="qual-explainer"></p>
+          </section>
+          <section class="settings">
+            <h2>Match & clock</h2>
+            <div class="two-fields">
+              <label
+                >Match<input
+                  id="match"
+                  type="number"
+                  min="1"
+                  max="100" /></label
+              ><label
+                >Of<input id="totalMatches" type="number" min="1" max="100"
+              /></label>
+            </div>
+            <output id="clock" class="clock">00:00</output>
+            <div class="clock-actions">
+              <button id="toggle-clock">Start clock</button
+              ><button id="reset-clock">Reset</button>
+            </div>
+          </section>
+          <details class="settings">
+            <summary>Event & scoring</summary>
+            <label>Event name<input id="event" maxlength="100" /></label
+            ><label>Stage / region<input id="stage" maxlength="100" /></label
+            ><label
+              >Points per elimination<input
+                id="eliminationPoints"
+                type="number"
+                min="0"
+                max="100" /></label
+            ><label
+              >Placement points, first to last<textarea
+                id="placementPoints"
+                rows="4"
+              ></textarea>
+            </label>
+            <p>
+              Example scoring only. Enter your event’s actual rules. Unlisted
+              placements earn zero.
+            </p>
+          </details>
+        </aside>
+      </div>
+      <footer>
+        Dropcast is an independent community tool. Not affiliated with Epic
+        Games. Manual standings; no game account or live data connection
+        required.
+      </footer>
+    </main>
+  </body>
+</html>

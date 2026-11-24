@@ -1,0 +1,16 @@
+{
+  "name": "dropcast-overlay",
+  "version": "1.0.0",
+  "description": "A local-first Fortnite broadcast desk and transparent OBS overlays.",
+  "type": "module",
+  "private": true,
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node server.mjs",
+    "test": "node --test",
+    "check": "node --check server.mjs && node --check public/app.js && node --check public/model.js"
+  },
+  "license": "MIT"
+}
